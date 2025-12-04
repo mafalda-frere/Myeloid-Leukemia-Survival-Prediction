@@ -82,22 +82,29 @@ Training labels include:
 
 ## Repository Structure
 
-### Notebooks
 
-* **`myeloid_survival_prediction.ipynb`** - End-to-end summary of the full approach
-* **`data_vizualisation.ipynb`** - EDA & feature inspection
-* **`explo_surv_data.ipynb`** - Survival data exploration
-* **`surv_prediction.py`** - Classical Cox and survival models
-* **`deepsurv_prediction.py`** - DeepSurv training & evaluation
-* **`feature_engineering.py`** - Testing and validating feature engineering steps
+Myeloid-Leukemia-Survival-Prediction/
+├── LICENSE
+├── README.md
+├── requirements.txt        ← dependencies
+├── data/                   ← (ignored by Git - must be added locally)
+│   ├── X_train/            ← clinical + molecular + targets
+│   └── X_test/             ← clinical + molecular
+├── notebooks/              ← analysis & presentation workflow
+│   ├── explo_surv_data.ipynb
+│   ├── base_prediction.ipynb
+│   ├── benchmark_challenge.ipynb
+│   └── myeloid_survival_prediction.ipynb
+├── scripts/                ← runnable experiment scripts
+│   ├── survival_tree_pipeline.py
+│   ├── deepsurv_pipeline.py
+│   └── feature_engineering_experiments.py
+└── src/                    ← reusable Python package
+    ├── deepsurv/           ← DeepSurv model, training & K-Fold eval
+    ├── feature_engineering/← encoding, cytogenetics parser, mutation feats
+    └── tree_based_models/  ← CoxPH / RSF pipelines and model selection
 
-### Modules
 
-* **deepsurv/** - Contains the DeepSurv model, its training pipeline, and utility functions for survival loss, metrics, and IPCW computation.
-
-* **feature_engineering/** - Implements all preprocessing steps, including categorical encoding, cytogenetic parsing, and mutation feature aggregation.
-
-* **tree_based_models/** - Provides pipelines and parameter configurations for training and evaluating classical survival models such as Cox and Random Survival Forests.
 
 ---
 
