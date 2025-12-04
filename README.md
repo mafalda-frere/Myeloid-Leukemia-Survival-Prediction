@@ -87,9 +87,6 @@ Myeloid-Leukemia-Survival-Prediction/
 ├── LICENSE
 ├── README.md
 ├── requirements.txt        ← dependencies
-├── data/                   ← (ignored by Git - must be added locally)
-│   ├── X_train/            ← clinical + molecular + targets
-│   └── X_test/             ← clinical + molecular
 ├── notebooks/              ← analysis & presentation workflow
 │   ├── explo_surv_data.ipynb
 │   ├── base_prediction.ipynb
