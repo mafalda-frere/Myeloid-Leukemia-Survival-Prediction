@@ -1,3 +1,6 @@
+#%%
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "src")))
 # %%
 """
 Comprehensive Feature Engineering for Survival Modeling

@@ -1,32 +1,40 @@
+#%%
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "src")))
 # %%
 """
-DeepSurv Pipeline for Survival Prediction
+Tree-Based Survival Modeling Pipeline
 """
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from deepsurv import model_selection_using_kfold_deepsurv, DeepSurv, train_deepsurv
+from tree_based_models import model_selection_using_kfold_surv, get_model
+from sklearn.impute import SimpleImputer
+from sksurv.linear_model import CoxPHSurvivalAnalysis, IPCRidge, CoxnetSurvivalAnalysis
+from sksurv.ensemble import RandomSurvivalForest, GradientBoostingSurvivalAnalysis
 from feature_engineering import (
     one_hot_aggregate,
     add_cytogenetic_features,
     create_molecular_feat,
 )
 
-from sklearn.preprocessing import StandardScaler
-from sklearn.impute import SimpleImputer
+from sksurv.util import Surv
 
 # %%
 # Load Data
+# Clinical Data
 clinical_train = pd.read_csv("data/X_train/clinical_train.csv")
 clinical_test = pd.read_csv("data/X_test/clinical_test.csv")
 
+# Molecular Data
 molecular_train = pd.read_csv("data/X_train/molecular_train.csv")
 molecular_test = pd.read_csv("data/X_test/molecular_test.csv")
 
 target_train = pd.read_csv("data/X_train/target_train.csv")
 
-
-# Merge training data
+# Preview the data
+clinical_train.head()
+# %%
 train = pd.concat(
     [
         clinical_train.set_index("ID"),
@@ -34,8 +42,6 @@ train = pd.concat(
     ],
     axis=1,
 )
-
-# Drop rows with missing survival targets
 train = train[~train["OS_YEARS"].isna()]
 train.head()
 
@@ -47,7 +53,7 @@ def feat_engineering(
     fill_not_molecular=False,
 ) -> tuple[pd.DataFrame, list]:
 
-    # Identify patients with no molecular data those are dropped from the dataset
+    # Identify patients with no molecular data those are dropped from the dataset whule one_hot_aggregate
     ids_not_molecular = [
         id for id in data.index.unique() if id not in molecular_data["ID"].unique()
     ]
@@ -89,7 +95,7 @@ not_molecular_test = clinical_test[
 ].set_index("ID")
 
 train, feat_train = feat_engineering(
-    data=train, molecular_data=molecular_train, fill_not_molecular=True
+    data=train, molecular_data=molecular_train, fill_not_molecular=False
 )
 test, feat_test = feat_engineering(
     data=test, molecular_data=molecular_test, fill_not_molecular=True
@@ -97,79 +103,73 @@ test, feat_test = feat_engineering(
 
 # Align train/test feature sets
 feats = [ft for ft in feat_test if ft in feat_train]
-
 # %%
 # Define Feature Columns
 target = "OS_YEARS"
 status = "OS_STATUS"
 features = ["BM_BLAST", "WBC", "HB", "PLT"] + feats
 
-# DeepSurv hyperparameters
-hidden_layers_sizes = [64, 32]
-dropout = 0.4
-n_splits = 6
-n_epochs = 50
-lr = 1e-4
-weight_decay = 1e-4
+# %%
+# Select and Configure Tree-Based Model
+
+# Test Random Survival Forest
+model_cls = RandomSurvivalForest
+
+model_params = {
+    "n_estimators": 150,
+    "max_depth": 15,
+    "min_weight_fraction_leaf": 0.005,
+    "random_state": 42,
+}
+
+# # Test Gradient Boosting Survival Analysis (currently active)
+
+# model_cls = GradientBoostingSurvivalAnalysis
+
+# model_params = {
+#     "n_estimators": 100,
+#     "max_depth": 4,
+#     "min_samples_split": 0.01,
+#     "min_samples_leaf": 0.005,
+#     "random_state": 42,
+#     "subsample": 0.9,
+#     "ccp_alpha": 0.001,
+# }
 
 # %%
-# Model Selection with Cross-Validation
-results = model_selection_using_kfold_deepsurv(
+# Model Selection via K-Fold Cross Validation
+model_selection_using_kfold_surv(
     data=train.reset_index(),
-    features=features,
     target=target,
     status=status,
-    hidden_layers_sizes=hidden_layers_sizes,
-    dropout=dropout,
-    n_splits=n_splits,
-    n_epochs=n_epochs,
-    lr=lr,
-    weight_decay=weight_decay,
+    model_cls=model_cls,
+    params=model_params,
+    features=features,
+    feat_engineering=None,
     unique_id="ID",
+    plot_ft_importance=True,
+    n_splits=6,
+    log=False,
 )
 
 # %%
-# Data Preprocessing (Imputation + Scaling)
+# Training model on full dataset
 X_train = train[features]
 X_test = test[features]
-t_train = train[target]
-e_train = train[status]
 
 imputer = SimpleImputer(strategy="median")
-scaler = StandardScaler()
-
 X_train = imputer.fit_transform(X_train)
 X_test = imputer.transform(X_test)
 
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
+y_train = Surv.from_dataframe(status, target, train)
 
-# %%
-# Train Final DeepSurv Model
-n_in = X_train.shape[1]
-model = DeepSurv(
-    n_in=n_in,
-    hidden_layers_sizes=hidden_layers_sizes,
-    dropout=dropout,
-)
+model = model_cls(**model_params)
+model.fit(X_train, y_train)
 
-# Train model on full training set
-model = train_deepsurv(
-    model=model,
-    x_train=X_train,
-    e_train=e_train.values,
-    t_train=t_train.values,
-    n_epochs=n_epochs,
-    lr=lr,
-    weight_decay=weight_decay,
-    device="cpu",
-    verbose=True,
-)
 # %%
 # Generate Predictions and Save Submission
 preds = model.predict(X_test)
 
 submission = pd.Series(preds, index=test.index, name="risk_score")
-submission.to_csv("data/deep_surv.csv")
-
+submission.to_csv("data/surv_boosting.csv")
 # %%
